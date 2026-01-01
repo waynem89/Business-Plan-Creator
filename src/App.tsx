@@ -6,46 +6,59 @@ import { InfoPanel } from './components/InfoPanel';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
 import { StorageService } from './services/storageService';
+import { Loader2 } from 'lucide-react';
 
 // The "Router" component inside the provider
 const MainLayout: React.FC = () => {
   const [view, setView] = useState<'landing' | 'dashboard' | 'editor'>('landing');
   const [taskOverlayId, setTaskOverlayId] = useState<string | null>(null);
-  const { loadPlan, createNewPlan, sections } = usePlan();
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const { loadPlan, createNewPlan } = usePlan();
 
   useEffect(() => {
-    // Check auth on load
-    const user = StorageService.getUser();
-    if (user?.isLoggedIn) {
-      setView('dashboard');
-    } else {
-      setView('landing');
-    }
+    // Subscribe to Firebase Auth changes
+    const unsubscribe = StorageService.onAuthChange((user) => {
+      if (user) {
+        // If we are on landing, go to dashboard. Otherwise stay where we are (editor/dashboard).
+        setView(current => current === 'landing' ? 'dashboard' : current);
+      } else {
+        setView('landing');
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleLogin = () => {
-    setView('dashboard');
+    // Handled by onAuthChange
   };
 
   const handleLogout = () => {
     StorageService.logout();
-    setView('landing');
+    // Handled by onAuthChange
   };
 
-  const handleCreatePlan = () => {
-    const newId = createNewPlan();
-    // Plan created and loaded in context
+  const handleCreatePlan = async () => {
+    const newId = await createNewPlan();
     setView('editor');
   };
 
-  const handleSelectPlan = (id: string) => {
-    loadPlan(id);
+  const handleSelectPlan = async (id: string) => {
+    await loadPlan(id);
     setView('editor');
   };
 
   const handleBackToDashboard = () => {
     setView('dashboard');
   };
+
+  if (isAuthLoading) {
+    return (
+        <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        </div>
+    );
+  }
 
   if (view === 'landing') {
     return <LandingPage onLogin={handleLogin} />;

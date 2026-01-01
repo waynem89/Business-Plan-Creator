@@ -302,7 +302,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ sectionId, dat
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
-                                        data={data.startupCosts}
+                                        data={data.startupCosts as any[]}
                                         cx="50%"
                                         cy="50%"
                                         innerRadius={60}

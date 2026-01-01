@@ -4,8 +4,8 @@ import { generateRetailChecklist, chatWithRetailConsultant } from '../services/g
 import { StorageService, FullPlan } from '../services/storageService';
 
 interface ExtendedPlanContextType extends PlanContextType {
-  loadPlan: (id: string) => void;
-  createNewPlan: () => string;
+  loadPlan: (id: string) => Promise<void>;
+  createNewPlan: () => Promise<string>;
   planMetadata: { id: string, name: string } | null;
 }
 
@@ -66,9 +66,9 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
   // Load a plan into state
-  const loadPlan = (id: string) => {
+  const loadPlan = async (id: string) => {
     isInitialLoad.current = true;
-    const plan = StorageService.getPlan(id);
+    const plan = await StorageService.getPlan(id);
     if (plan) {
       setCurrentPlanId(plan.id);
       setPlanName(plan.name);
@@ -78,24 +78,30 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const createNewPlan = () => {
+  const createNewPlan = async () => {
     // Deep copy default sections to ensure no reference sharing
     const initialSections = JSON.parse(JSON.stringify(DEFAULT_SECTIONS_TEMPLATE));
-    const newPlan = StorageService.createPlan(initialSections);
-    loadPlan(newPlan.id);
-    return newPlan.id;
+    const newId = await StorageService.createPlan(initialSections);
+    await loadPlan(newId);
+    return newId;
   };
 
   // Auto-save effect
   useEffect(() => {
     if (currentPlanId && sections.length > 0 && !isInitialLoad.current) {
-      const planToSave: FullPlan = {
-        id: currentPlanId,
-        name: planName,
-        lastEdited: Date.now(),
-        sections: sections
+      const saveToCloud = async () => {
+        const planToSave: Omit<FullPlan, 'userId'> = {
+            id: currentPlanId,
+            name: planName,
+            lastEdited: Date.now(),
+            sections: sections
+        };
+        await StorageService.savePlan(planToSave);
       };
-      StorageService.savePlan(planToSave);
+      
+      // Debounce saving slightly could be good, but for now strict effect is fine 
+      // as long as we don't block UI.
+      saveToCloud();
     }
     // Set initial load to false after first render cycle
     if(isInitialLoad.current && sections.length > 0) {
@@ -107,15 +113,6 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateSection = (id: string, data: Partial<Section>) => {
     setSections(prev => prev.map(sec => {
       if (sec.id !== id) return sec;
-      
-      // Basic history tracking
-      if (data.content && data.content !== sec.content) {
-         // Logic handled in component mostly, but ensuring structure is valid
-      }
-      
-      // If title changed in first section (Executive Summary) or explicitly generic, maybe update plan name? 
-      // For now, plan name is separate.
-      
       return { ...sec, ...data };
     }));
   };
