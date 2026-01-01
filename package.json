@@ -11,7 +11,7 @@
     "deploy": "firebase deploy"
   },
   "dependencies": {
-    "@google/genai": "^0.1.0",
+    "@google/genai": "latest",
     "firebase": "^10.8.0",
     "html2pdf.js": "^0.10.1",
     "lucide-react": "^0.344.0",
