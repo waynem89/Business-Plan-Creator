@@ -6,7 +6,7 @@ interface LandingPageProps {
   onLogin: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
+export const LandingPage: React.FC<LandingPageProps> = () => {
 
   const handleGoogleLogin = async () => {
     await StorageService.login();

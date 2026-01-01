@@ -7,7 +7,6 @@ import {
   LayoutTemplate,
   MoreVertical,
   ArrowLeft,
-  Download,
   Printer
 } from 'lucide-react';
 
@@ -32,29 +31,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenTaskOverlay, onBackToDas
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ x: 0, y: 0, sectionId: null, visible: false });
   const [editingId, setEditingId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
 
   // Export Function
   const handleExportPDF = () => {
-    setIsExporting(true);
-    const element = document.getElementById('root'); // We typically capture the whole app or a specific container
-    // However, for a clean export, we usually want to construct a clean DOM or hide UI elements.
-    // The easiest robust way in this setup is window.print() with specific CSS,
-    // but the user requested "save as file". 
-    // Let's use html2pdf on the Editor Area content specifically if possible, 
-    // OR just use window.print() and guide them. 
-    // Given the prompt "save... as a pdf file", html2pdf is safer if we want to bypass the system print dialog.
-    
-    // BETTER APPROACH: Generate a clean print view temporarily?
-    // Let's try to target the 'EditorArea' mostly, but we want the whole plan.
-    // Actually, printing the *whole* plan means concatenating all sections.
-    // The current view only shows one section.
-    
-    // For this version, let's export the CURRENT visible section + Financials if active.
-    // To export the WHOLE plan, we'd need to render all sections invisibly. 
-    // Let's stick to window.print() which is universally supported and can be styled to look like a doc.
+    // For this version, let's stick to window.print() which is universally supported and can be styled to look like a doc.
     window.print();
-    setIsExporting(false);
   };
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -210,7 +191,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenTaskOverlay, onBackToDas
             }}
             className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
           >
-            {/* <ListTodo className="w-4 h-4" /> */}
             Open Task List
           </button>
           <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>

@@ -39,7 +39,7 @@ const MainLayout: React.FC = () => {
   };
 
   const handleCreatePlan = async () => {
-    const newId = await createNewPlan();
+    await createNewPlan();
     setView('editor');
   };
 

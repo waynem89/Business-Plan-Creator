@@ -310,7 +310,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ sectionId, dat
                                         paddingAngle={5}
                                         dataKey="amount"
                                     >
-                                        {data.startupCosts.map((entry, index) => (
+                                        {data.startupCosts.map((_, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>

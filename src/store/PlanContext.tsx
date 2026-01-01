@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { PlanContextType, Section, ChecklistItem, FinancialData } from '../types';
+import { PlanContextType, Section, FinancialData } from '../types';
 import { generateRetailChecklist, chatWithRetailConsultant } from '../services/geminiService';
 import { StorageService, FullPlan } from '../services/storageService';
 
@@ -99,8 +99,6 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await StorageService.savePlan(planToSave);
       };
       
-      // Debounce saving slightly could be good, but for now strict effect is fine 
-      // as long as we don't block UI.
       saveToCloud();
     }
     // Set initial load to false after first render cycle
