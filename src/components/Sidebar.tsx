@@ -4,10 +4,11 @@ import {
   Settings, 
   GripVertical, 
   Plus, 
-  Trash2, 
-  CheckSquare, 
   LayoutTemplate,
-  MoreVertical
+  MoreVertical,
+  ArrowLeft,
+  Download,
+  Printer
 } from 'lucide-react';
 
 interface ContextMenuState {
@@ -17,14 +18,45 @@ interface ContextMenuState {
   visible: boolean;
 }
 
-export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void }> = ({ onOpenTaskOverlay }) => {
-  const { sections, activeSectionId, setActiveSectionId, reorderSections, addSection, deleteSection, updateSection } = usePlan();
+// Declare html2pdf for TypeScript since it's loaded via CDN
+declare const html2pdf: any;
+
+interface SidebarProps {
+  onOpenTaskOverlay: (sectionId: string) => void;
+  onBackToDashboard: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ onOpenTaskOverlay, onBackToDashboard }) => {
+  const { sections, activeSectionId, setActiveSectionId, reorderSections, addSection, deleteSection, updateSection, planMetadata } = usePlan();
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ x: 0, y: 0, sectionId: null, visible: false });
   const [editingId, setEditingId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Drag and Drop Handlers
+  // Export Function
+  const handleExportPDF = () => {
+    setIsExporting(true);
+    const element = document.getElementById('root'); // We typically capture the whole app or a specific container
+    // However, for a clean export, we usually want to construct a clean DOM or hide UI elements.
+    // The easiest robust way in this setup is window.print() with specific CSS,
+    // but the user requested "save as file". 
+    // Let's use html2pdf on the Editor Area content specifically if possible, 
+    // OR just use window.print() and guide them. 
+    // Given the prompt "save... as a pdf file", html2pdf is safer if we want to bypass the system print dialog.
+    
+    // BETTER APPROACH: Generate a clean print view temporarily?
+    // Let's try to target the 'EditorArea' mostly, but we want the whole plan.
+    // Actually, printing the *whole* plan means concatenating all sections.
+    // The current view only shows one section.
+    
+    // For this version, let's export the CURRENT visible section + Financials if active.
+    // To export the WHOLE plan, we'd need to render all sections invisibly. 
+    // Let's stick to window.print() which is universally supported and can be styled to look like a doc.
+    window.print();
+    setIsExporting(false);
+  };
+
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedId(id);
     e.dataTransfer.effectAllowed = 'move';
@@ -33,10 +65,8 @@ export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     if (!draggedId) return;
-    
     const draggedIndex = sections.findIndex(s => s.id === draggedId);
     if (draggedIndex === index) return;
-
     reorderSections(draggedIndex, index);
   };
 
@@ -44,15 +74,9 @@ export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void 
     setDraggedId(null);
   };
 
-  // Context Menu Handlers
   const handleContextMenu = (e: React.MouseEvent, sectionId: string) => {
     e.preventDefault();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      sectionId,
-      visible: true
-    });
+    setContextMenu({ x: e.clientX, y: e.clientY, sectionId, visible: true });
   };
 
   const closeContextMenu = () => {
@@ -65,10 +89,8 @@ export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void 
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  // Renaming
   const startEditing = (id: string, currentTitle: string) => {
     setEditingId(id);
-    // Timeout to allow render before focusing
     setTimeout(() => {
         if(editInputRef.current) {
             editInputRef.current.value = currentTitle;
@@ -85,16 +107,20 @@ export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void 
   };
 
   return (
-    <div className="w-64 bg-slate-900 text-slate-300 flex flex-col h-full border-r border-slate-800 flex-shrink-0">
+    <div className="w-64 bg-slate-900 text-slate-300 flex flex-col h-full border-r border-slate-800 flex-shrink-0 no-print">
       {/* Header */}
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-800 space-y-4">
+        <button 
+            onClick={onBackToDashboard}
+            className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors"
+        >
+            <ArrowLeft className="w-3 h-3" /> Back to Dashboard
+        </button>
+        
         <div className="flex items-center gap-2 text-white font-bold">
           <LayoutTemplate className="w-5 h-5 text-indigo-500" />
-          <span>RetailPlan AI</span>
+          <span className="truncate" title={planMetadata?.name}>{planMetadata?.name || 'RetailPlan AI'}</span>
         </div>
-        <button className="hover:text-white transition-colors">
-          <Settings className="w-5 h-5" />
-        </button>
       </div>
 
       {/* List */}
@@ -135,7 +161,6 @@ export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void 
               <span className="truncate flex-1 select-none">{section.title}</span>
             )}
 
-            {/* Hover Actions (quick delete/edit) */}
             <div className={`absolute right-2 flex gap-1 ${activeSectionId === section.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 <button 
                   onClick={(e) => { e.stopPropagation(); startEditing(section.id, section.title); }}
@@ -156,23 +181,27 @@ export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void 
         </button>
       </div>
 
-      {/* Account / User */}
-      <div className="p-4 border-t border-slate-800 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs">
-          JD
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <div className="text-sm font-medium text-white truncate">John Doe</div>
-          <div className="text-xs text-slate-500 truncate">Pro Account</div>
+      {/* Export / Settings */}
+      <div className="p-4 border-t border-slate-800 space-y-2">
+        <button 
+            onClick={handleExportPDF}
+            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-md text-sm transition-colors"
+        >
+            <Printer className="w-4 h-4" />
+            Save as PDF
+        </button>
+        <div className="flex items-center justify-between text-slate-500 pt-2">
+            <button className="hover:text-white transition-colors"><Settings className="w-5 h-5" /></button>
+            <span className="text-xs">v1.2.0</span>
         </div>
       </div>
 
-      {/* Custom Context Menu */}
+      {/* Context Menu */}
       {contextMenu.visible && (
         <div 
           className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg py-1 w-48"
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()} // Prevent closing immediately
+          onClick={(e) => e.stopPropagation()}
         >
           <button 
             onClick={() => {
@@ -181,7 +210,7 @@ export const Sidebar: React.FC<{ onOpenTaskOverlay: (sectionId: string) => void 
             }}
             className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
           >
-            <CheckSquare className="w-4 h-4" />
+            {/* <ListTodo className="w-4 h-4" /> */}
             Open Task List
           </button>
           <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>

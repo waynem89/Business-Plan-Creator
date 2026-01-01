@@ -1,10 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { PlanContextType, Section, ChecklistItem } from '../types';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { PlanContextType, Section, ChecklistItem, FinancialData } from '../types';
 import { generateRetailChecklist, chatWithRetailConsultant } from '../services/geminiService';
+import { StorageService, FullPlan } from '../services/storageService';
 
-const PlanContext = createContext<PlanContextType | undefined>(undefined);
+interface ExtendedPlanContextType extends PlanContextType {
+  loadPlan: (id: string) => void;
+  createNewPlan: () => string;
+  planMetadata: { id: string, name: string } | null;
+}
 
-const INITIAL_FINANCIAL_DATA = {
+const PlanContext = createContext<ExtendedPlanContextType | undefined>(undefined);
+
+const INITIAL_FINANCIAL_DATA: FinancialData = {
   currency: '$',
   startupCosts: [
     { id: '1', name: 'Lease Deposit', amount: 5000 },
@@ -24,7 +31,7 @@ const INITIAL_FINANCIAL_DATA = {
   dailyCustomers: 20
 };
 
-const INITIAL_SECTIONS: Section[] = [
+const DEFAULT_SECTIONS_TEMPLATE: Section[] = [
   { id: '1', title: 'Executive Summary', content: '', history: [], checklist: [], tasks: [], notes: '', researchFiles: [], chatHistory: [] },
   { id: '2', title: 'Company Overview', content: '', history: [], checklist: [], tasks: [], notes: '', researchFiles: [], chatHistory: [] },
   { id: '3', title: 'Market Analysis (Retail)', content: '', history: [], checklist: [], tasks: [], notes: '', researchFiles: [], chatHistory: [] },
@@ -46,25 +53,69 @@ const INITIAL_SECTIONS: Section[] = [
 ];
 
 export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [sections, setSections] = useState<Section[]>(INITIAL_SECTIONS);
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(INITIAL_SECTIONS[0].id);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [planName, setPlanName] = useState<string>('');
+  
+  // Ref to prevent infinite loops in useEffect when saving
+  const isInitialLoad = useRef(true);
 
   // Helper to generate ID
   const generateId = () => Math.random().toString(36).substr(2, 9);
+
+  // Load a plan into state
+  const loadPlan = (id: string) => {
+    isInitialLoad.current = true;
+    const plan = StorageService.getPlan(id);
+    if (plan) {
+      setCurrentPlanId(plan.id);
+      setPlanName(plan.name);
+      setSections(plan.sections);
+      setActiveSectionId(plan.sections.length > 0 ? plan.sections[0].id : null);
+      isInitialLoad.current = false;
+    }
+  };
+
+  const createNewPlan = () => {
+    // Deep copy default sections to ensure no reference sharing
+    const initialSections = JSON.parse(JSON.stringify(DEFAULT_SECTIONS_TEMPLATE));
+    const newPlan = StorageService.createPlan(initialSections);
+    loadPlan(newPlan.id);
+    return newPlan.id;
+  };
+
+  // Auto-save effect
+  useEffect(() => {
+    if (currentPlanId && sections.length > 0 && !isInitialLoad.current) {
+      const planToSave: FullPlan = {
+        id: currentPlanId,
+        name: planName,
+        lastEdited: Date.now(),
+        sections: sections
+      };
+      StorageService.savePlan(planToSave);
+    }
+    // Set initial load to false after first render cycle
+    if(isInitialLoad.current && sections.length > 0) {
+        isInitialLoad.current = false;
+    }
+  }, [sections, currentPlanId, planName]);
+
 
   const updateSection = (id: string, data: Partial<Section>) => {
     setSections(prev => prev.map(sec => {
       if (sec.id !== id) return sec;
       
-      // Handle version history if content changes significantly (debounced in UI, but handled here structurally)
-      let newHistory = sec.history;
+      // Basic history tracking
       if (data.content && data.content !== sec.content) {
-         // In a real app, we'd debounce this or save on specific triggers. 
-         // For now, we update history only if explicitly passed or we rely on the component to manage when to push to history.
-         // We will rely on the component to pass the *new* history array if it wants to record a version.
+         // Logic handled in component mostly, but ensuring structure is valid
       }
-
+      
+      // If title changed in first section (Executive Summary) or explicitly generic, maybe update plan name? 
+      // For now, plan name is separate.
+      
       return { ...sec, ...data };
     }));
   };
@@ -107,8 +158,6 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const generateChecklist = async (sectionId: string) => {
     const section = sections.find(s => s.id === sectionId);
     if (!section) return;
-
-    // Only generate if empty to avoid overwriting user work, or explicit request
     if (section.checklist.length > 0) return;
 
     setIsLoadingAI(true);
@@ -122,8 +171,6 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!section) return;
 
     setIsLoadingAI(true);
-    
-    // Optimistic update for user message
     const userMsg = { id: generateId(), role: 'user' as const, text: prompt, timestamp: Date.now() };
     const updatedHistory = [...section.chatHistory, userMsg];
     updateSection(sectionId, { chatHistory: updatedHistory });
@@ -132,11 +179,9 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const aiMsg = { id: generateId(), role: 'model' as const, text: responseText, timestamp: Date.now() };
     updateSection(sectionId, { chatHistory: [...updatedHistory, aiMsg] });
-    
     setIsLoadingAI(false);
   };
 
-  // Auto-generate checklist when switching to a section if it's empty
   useEffect(() => {
     if (activeSectionId) {
       const section = sections.find(s => s.id === activeSectionId);
@@ -144,7 +189,6 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
         generateChecklist(activeSectionId);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSectionId]);
 
   return (
@@ -158,7 +202,10 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
       reorderSections,
       generateChecklist,
       generateContentHelp,
-      isLoadingAI
+      isLoadingAI,
+      loadPlan,
+      createNewPlan,
+      planMetadata: currentPlanId ? { id: currentPlanId, name: planName } : null
     }}>
       {children}
     </PlanContext.Provider>
